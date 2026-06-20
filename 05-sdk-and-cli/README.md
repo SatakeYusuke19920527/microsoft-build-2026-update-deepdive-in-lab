@@ -54,7 +54,33 @@ Microsoft Foundry は、**Microsoft Agent Framework / LangGraph / GitHub Copilot
 
 ---
 
-## 3. 全体像
+## 3. `/fleet` — ローカルへの選択的タスク委譲
+
+Copilot CLI に、**クラウドとローカルモデルを使い分ける** 仕組みが加わります。
+
+- **`/fleet`**：クラウドで動く主エージェントが **プランを立て**、各タスクの **複雑さを評価**し、適切なものを **ローカルモデルのサブエージェントへルーティング**
+- モデルのサイズと能力に応じて、ローカルで処理すべきものを振り分ける
+
+> "Using `/fleet`, the primary agent running in the cloud builds a plan, assesses the complexity of each task, and routes appropriate ones locally based on the models' size and capability"
+
+→ クラウドの計画力 × ローカルの低レイテンシ・低コストを **ハイブリッド** に活用。
+
+---
+
+## 4. MXC によるプロセス分離（Copilot CLI が採用）
+
+Copilot CLI は、Windows の **Microsoft Execution Containers (MXC)** の **高速プロセス分離（fast process isolation）** を採用しています。
+
+- エージェントの実行を、ユーザーの **デスクトップ・クリップボード・UI・入力デバイス** から分離
+- **セッション分離** はエージェントを強いユーザーIDに束ね、UIスプーフィング・入力インジェクション・クロスセッションのデータ漏えいを緩和
+
+> "Fast process isolation (adopted by GitHub Copilot CLI) and session isolation separates the agent's execution from the user's desktop, clipboard, UI and input devices"
+
+（→ 詳細は [03-sandboxes](../03-sandboxes/README.md)・[12-windows-for-developers](../12-windows-for-developers/README.md)）
+
+---
+
+## 5. 全体像
 
 ```
                 ┌──────────── 同一エージェントランタイム ────────────┐
