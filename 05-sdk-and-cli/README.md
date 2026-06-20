@@ -46,11 +46,12 @@ Microsoft Foundry は、**Microsoft Agent Framework / LangGraph / GitHub Copilot
 |------|------|
 | **再設計 TUI** | `/experimental` モードで、**PR・Issue・gist** にタブ切り替えアクセス |
 | **Voice mode（音声入力）** | **オンデバイス**の音声テキスト変換。**音声は端末の外に出ない** |
-| **`/every`** | 繰り返しプロンプト・バックグラウンドタスクの **スケジュール** |
+| **Prompt Scheduling** | **`/every`**（定期）・**`/after`**（遅延）でプロンプト・スキルをスケジュール実行 |
+| **Rubber Duck 連携** | メインエージェントが必要に応じて **Rubber Duck** へ設計・実装・テストの批評を依頼（→ [04章](../04-code-review/README.md)） |
 
 > "Copilot CLI now has a redesigned interface, voice input, and scheduled tasks to keep you there. ... Voice mode uses on-device speech-to-text, so audio never leaves your machine. `/every` schedules recurring prompts and background tasks."
 
-→ 「ターミナルに留まったまま」エージェント開発を完結できる。
+→ 「ターミナルに留まったまま」エージェント開発を完結できる。`/every`・`/after` による定期/遅延実行、CLI 内からの **Rubber Duck** 批評依頼で、人手を介さず品質チェックまで回せます。
 
 ---
 

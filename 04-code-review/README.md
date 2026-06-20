@@ -56,9 +56,9 @@ PR を **より高い推論能力のモデル** にルーティングし、**精
 
 ---
 
-## 5. Azure DevOps ネイティブ対応
+## 5. Azure DevOps / Azure Repos ネイティブ対応
 
-Azure DevOps 上でも **Copilot code review をネイティブに利用可能** になりました。
+Azure DevOps（**Azure Repos**）上でも **Copilot code review をネイティブに利用可能**（テクニカルプレビュー）になりました。
 
 - **ワンクリックレビュー**
 - **インラインコメント**
