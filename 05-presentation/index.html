@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Microsoft Build 2026 — GitHub Copilot Update Deep Dive</title>
+<script>
+  (() => {
+    const param = new URLSearchParams(window.location.search).get("clawpilotTheme");
+    const theme =
+      param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+
+  /* Theme accent colors per section */
+  --theme1: #0969DA;
+  --theme1-soft: #CFE3FF;
+  --theme2: #2DA44E;
+  --theme2-soft: #DAFBE1;
+  --theme3: #8250DF;
+  --theme3-soft: #FBEFFF;
+  --theme4: #BC4C00;
+  --theme4-soft: #FFF1E5;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+
+  --theme1: #58a6ff;
+  --theme1-soft: rgba(88,166,255,0.15);
+  --theme2: #3fb950;
+  --theme2-soft: rgba(63,185,80,0.15);
+  --theme3: #a371f7;
+  --theme3-soft: rgba(163,113,247,0.15);
+  --theme4: #f0883e;
+  --theme4-soft: rgba(240,136,62,0.15);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--cp-bg);
+  color: var(--cp-text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--cp-panel-strong);
+  border-bottom: 1px solid var(--cp-border);
+  backdrop-filter: blur(12px);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  gap: 1rem;
+}
+.site-header .logo {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--cp-text);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.logo-badge {
+  background: var(--cp-accent);
+  color: var(--cp-accent-fg);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+.header-nav {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.header-nav::-webkit-scrollbar { display: none; }
+.nav-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  color: var(--cp-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.nav-pill:hover { background: var(--cp-surface-soft); color: var(--cp-text); }
+.nav-pill.active { background: var(--cp-accent-soft); color: var(--cp-accent); border-color: var(--cp-accent); }
+.nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.theme-toggle {
+  background: var(--cp-surface-soft);
+  border: 1px solid var(--cp-border);
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--cp-text-muted);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.theme-toggle:hover { background: var(--cp-surface); color: var(--cp-text); }
+
+/* ── HERO ── */
+.hero {
+  background: var(--cp-surface);
+  border-bottom: 1px solid var(--cp-border);
+  padding: 3.5rem 2rem 3rem;
+  text-align: center;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--cp-accent-soft);
+  color: var(--cp-accent);
+  border: 1px solid var(--cp-accent);
+  border-radius: 20px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 1.25rem;
+}
+.hero h1 {
+  font-size: clamp(1.75rem, 4vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-bottom: 0.75rem;
+}
+.hero h1 span { color: var(--cp-accent); }
+.hero p {
+  font-size: 1.05rem;
+  color: var(--cp-text-muted);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+.stat-item { text-align: center; }
+.stat-number { font-size: 2rem; font-weight: 800; color: var(--cp-accent); line-height: 1; }
+.stat-label { font-size: 0.75rem; color: var(--cp-text-muted); margin-top: 0.25rem; }
+
+/* ── OVERVIEW GRID ── */
+.overview-section {
+  padding: 2.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.overview-section h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cp-text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 1.25rem;
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.theme-card {
+  background: var(--cp-surface);
+  border: 1px solid var(--cp-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: all 0.15s;
+  box-shadow: 0 0 2px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.1);
+}
+.theme-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.theme-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.theme-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  color: #fff;
+}
+.theme-card h3 { font-size: 0.95rem; font-weight: 700; line-height: 1.3; }
+.theme-card p { font-size: 0.8rem; color: var(--cp-text-muted); line-height: 1.5; }
+.theme-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: auto;
+}
+
+/* ── SECTION ── */
+.content-section {
+  padding: 0 2rem 3rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 0 1.5rem;
+  border-bottom: 2px solid var(--cp-border);
+  margin-bottom: 2rem;
+}
+.section-num-large {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+.section-title-block h2 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01em; }
+.section-title-block p { font-size: 0.85rem; color: var(--cp-text-muted); margin-top: 0.2rem; }
+.section-badge {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  color: #fff;
+}
+
+/* ── CARDS GRID ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+.update-card {
+  background: var(--cp-surface);
+  border: 1px solid var(--cp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 2px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.1);
+  transition: box-shadow 0.15s;
+}
+.update-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.card-accent-bar { height: 4px; flex-shrink: 0; }
+.card-body { padding: 1rem 1.1rem 1rem; flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+.card-title { font-size: 0.92rem; font-weight: 700; line-height: 1.35; }
+.card-desc { font-size: 0.8rem; color: var(--cp-text-muted); line-height: 1.6; flex: 1; }
+.card-desc ul { padding-left: 1.1rem; }
+.card-desc li { margin-bottom: 0.25rem; }
+.card-footer { padding: 0.6rem 1.1rem; border-top: 1px solid var(--cp-border); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.card-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+  letter-spacing: 0.03em;
+}
+.tag-ga { background: rgba(22,163,74,0.12); color: var(--cp-success); }
+.tag-preview { background: rgba(245,158,11,0.12); color: var(--cp-warning); }
+.tag-new { background: var(--cp-accent-soft); color: var(--cp-accent); }
+
+.card-quote {
+  font-size: 0.75rem;
+  color: var(--cp-text-soft);
+  font-style: italic;
+  border-left: 3px solid var(--cp-border);
+  padding-left: 0.75rem;
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+
+/* ── SUBGROUP ── */
+.subgroup {
+  grid-column: 1 / -1;
+  margin: 1rem 0 0;
+}
+.subgroup-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--cp-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  padding-left: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.subgroup-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--cp-border);
+}
+.subgroup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+/* ── TABLE ── */
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 0.5rem;
+}
+.summary-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: var(--cp-surface-soft);
+  color: var(--cp-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--cp-border);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+.summary-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--cp-border);
+  vertical-align: top;
+}
+.summary-table tr:last-child td { border-bottom: none; }
+.summary-table tr:hover td { background: var(--cp-surface-soft); }
+.table-wrap {
+  background: var(--cp-surface);
+  border: 1px solid var(--cp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+
+/* ── MODEL TABLE ── */
+.model-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.model-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: var(--cp-surface-soft);
+  color: var(--cp-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--cp-border);
+}
+.model-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--cp-border); vertical-align: top; }
+.model-table tr:last-child td { border-bottom: none; }
+.model-name { font-weight: 700; color: var(--cp-text); }
+.model-cat { font-size: 0.7rem; background: var(--cp-surface-soft); padding: 2px 6px; border-radius: 4px; color: var(--cp-text-muted); }
+
+/* ── FOOTER ── */
+.site-footer {
+  border-top: 1px solid var(--cp-border);
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--cp-text-muted);
+  background: var(--cp-surface);
+}
+
+/* ── SCROLL MARGIN ── */
+[id] { scroll-margin-top: 70px; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 640px) {
+  .site-header { padding: 0 1rem; }
+  .hero { padding: 2.5rem 1rem 2rem; }
+  .overview-section, .content-section { padding-left: 1rem; padding-right: 1rem; }
+  .hero-stats { gap: 1.5rem; }
+  .header-nav { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="logo">
+    <span class="logo-badge">Build 2026</span>
+    GitHub Copilot Deep Dive
+  </div>
+  <nav class="header-nav">
+    <a class="nav-pill" href="#overview">
+      <span class="nav-dot" style="background:#b11f4b"></span>概要
+    </a>
+    <a class="nav-pill" href="#theme1">
+      <span class="nav-dot" style="background:var(--theme1)"></span>01 App
+    </a>
+    <a class="nav-pill" href="#theme2">
+      <span class="nav-dot" style="background:var(--theme2)"></span>02 Code Review
+    </a>
+    <a class="nav-pill" href="#theme3">
+      <span class="nav-dot" style="background:var(--theme3)"></span>03 SDK/CLI
+    </a>
+    <a class="nav-pill" href="#theme4">
+      <span class="nav-dot" style="background:var(--theme4)"></span>04 Cloud/AI
+    </a>
+  </nav>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙 テーマ切替</button>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    📅 Microsoft Build 2026 — 2026年6月2日
+  </div>
+  <h1>GitHub Copilot<br><span>アップデート Deep Dive</span></h1>
+  <p>Microsoft Build 2026 で発表された GitHub Copilot 関連アップデートを 4 テーマに整理。公式情報（GitHub Blog / Changelog / Docs / Microsoft AI）ベースの一次情報まとめ。</p>
+  <div class="hero-stats">
+    <div class="stat-item">
+      <div class="stat-number">35</div>
+      <div class="stat-label">総アップデート数</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">4</div>
+      <div class="stat-label">テーマ</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">7</div>
+      <div class="stat-label">新MAIモデル</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">6</div>
+      <div class="stat-label">SDK対応言語</div>
+    </div>
+  </div>
+</section>
+
+<!-- OVERVIEW -->
+<section id="overview" class="overview-section">
+  <h2>4 テーマ 概要</h2>
+  <div class="theme-grid">
+    <a class="theme-card" href="#theme1">
+      <div class="theme-card-header">
+        <div class="theme-num" style="background:var(--theme1)">01</div>
+        <h3>Copilot app / エージェント開発体験</h3>
+      </div>
+      <p>GitHub Copilot app・Copilot Max・Agent Merge・Canvas・Local/Cloud Sandboxes</p>
+      <span class="theme-count" style="background:var(--theme1-soft);color:var(--theme1)">⬛ 6 項目</span>
+    </a>
+    <a class="theme-card" href="#theme2">
+      <div class="theme-card-header">
+        <div class="theme-num" style="background:var(--theme2)">02</div>
+        <h3>Copilot Code Review</h3>
+      </div>
+      <p>レビュー拡張性・Medium tier・/security-review・/rubberduck GA・Azure Repos 対応</p>
+      <span class="theme-count" style="background:var(--theme2-soft);color:var(--theme2)">⬛ 5 項目</span>
+    </a>
+    <a class="theme-card" href="#theme3">
+      <div class="theme-card-header">
+        <div class="theme-num" style="background:var(--theme3)">03</div>
+        <h3>SDK / CLI / 実行基盤 / IDE</h3>
+      </div>
+      <p>Copilot SDK GA・CLI TUI・Voice Input・Prompt Scheduling・JetBrains 強化・VS Code・Visual Studio</p>
+      <span class="theme-count" style="background:var(--theme3-soft);color:var(--theme3)">⬛ 15 項目</span>
+    </a>
+    <a class="theme-card" href="#theme4">
+      <div class="theme-card-header">
+        <div class="theme-num" style="background:var(--theme4)">04</div>
+        <h3>Cloud Agent / コンテキスト / エコシステム</h3>
+      </div>
+      <p>Cloud Automations・PAT 不要・Memory++・Partner Apps・Gemini・MAI モデル 7 種・Frontier Tuning</p>
+      <span class="theme-count" style="background:var(--theme4-soft);color:var(--theme4)">⬛ 9 項目</span>
+    </a>
+  </div>
+</section>
+
+<!-- ══ THEME 1 ══ -->
+<div class="content-section" id="theme1">
+  <div class="section-header">
+    <div class="section-num-large" style="background:var(--theme1)">01</div>
+    <div class="section-title-block">
+      <h2>Copilot app / エージェント開発体験</h2>
+      <p>Agent-native development — エージェントをオーケストレートするコントロールセンター</p>
+    </div>
+    <span class="section-badge" style="background:var(--theme1)">6 項目</span>
+  </div>
+
+  <div class="cards-grid">
+    <!-- GitHub Copilot app -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme1)"></div>
+      <div class="card-body">
+        <div class="card-title">🖥️ GitHub Copilot app</div>
+        <div class="card-desc">
+          <ul>
+            <li>GitHub 上に構築された<strong>エージェントネイティブのデスクトップ体験</strong>（エディタのサイドバーではなくスタンドアロン）</li>
+            <li>接続したリポジトリをまたいで、<strong>My Work</strong> ビューで進行中の作業を一元把握</li>
+            <li>複数エージェントを<strong>並列にオーケストレーション</strong></li>
+            <li>既存の Copilot Pro / Pro+ / Business / Enterprise プランで利用可能</li>
+          </ul>
+          <div class="card-quote">"From a single My Work view, you can see work in motion across connected repositories: active sessions, issues, pull requests, and background automations."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-preview">テクニカルプレビュー</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Copilot Max -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme1)"></div>
+      <div class="card-body">
+        <div class="card-title">⚡ Copilot Max</div>
+        <div class="card-desc">
+          <ul>
+            <li>エージェントを<strong>高頻度で使うユーザー向け</strong>の上位利用枠</li>
+            <li>並列エージェント運用・上位モデル選択・長時間の autopilot 的ワークフローを後押し</li>
+            <li>既存の Free / Pro / Pro+ / Business / Enterprise に加わる位置づけ</li>
+            <li>MAI-Code-1-Flash は Free / Student / Pro / Pro+ / <strong>Max</strong> に展開</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新プラン</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Changelog</span>
+      </div>
+    </div>
+
+    <!-- Agent Merge -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme1)"></div>
+      <div class="card-body">
+        <div class="card-title">🔀 Agent Merge</div>
+        <div class="card-desc">
+          <ul>
+            <li>PR のレビュー・CI 監視・失敗チェック対応・承認待機・<strong>条件付きマージ</strong>までを自動化</li>
+            <li>どこまで自動化するかは<strong>開発者が選択</strong>（CI グリーン化／フィードバック対応／条件達成でマージ）</li>
+          </ul>
+          <div class="card-quote">"Agent Merge helps carry that pull request through review, checks, and merge. It monitors CI, tracks required reviewers, addresses failing checks..."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新機能</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme1)"></div>
+      <div class="card-body">
+        <div class="card-title">🎨 Canvas</div>
+        <div class="card-desc">
+          <ul>
+            <li>プラン・PR・ターミナル・ブラウザ・デプロイ・ダッシュボードなどを表示する<strong>双方向作業面</strong></li>
+            <li>エージェントが作業しながら Canvas を更新、開発者は同じ面で<strong>編集・並べ替え・承認・軌道修正</strong></li>
+            <li>人とエージェントが共に操作する <strong>Agent Experience (AX)</strong> の始まり</li>
+          </ul>
+          <div class="card-quote">"Canvases are bidirectional work surfaces for humans and agents."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新機能</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / Docs</span>
+      </div>
+    </div>
+
+    <!-- Local Sandboxes -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme1)"></div>
+      <div class="card-body">
+        <div class="card-title">🔒 Local Sandboxes</div>
+        <div class="card-desc">
+          <ul>
+            <li>ローカル PC 上で<strong>ファイル・ネットワーク・システム権限を制限</strong>した隔離実行環境</li>
+            <li>Copilot が<strong>自分のマシン上の隔離環境</strong>で動作</li>
+            <li>ローカルサンドボックスのポリシーは<strong>集中管理・強制</strong>が可能</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-preview">パブリックプレビュー</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Docs</span>
+      </div>
+    </div>
+
+    <!-- Cloud Sandboxes -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme1)"></div>
+      <div class="card-body">
+        <div class="card-title">☁️ Cloud Sandboxes</div>
+        <div class="card-desc">
+          <ul>
+            <li>GitHub ホストの<strong>一時的な隔離 Linux 環境</strong>でエージェントを動かす</li>
+            <li>組織が<strong>独自のポリシー</strong>を定義可能</li>
+            <li>クラウドから、<strong>どのデバイスでも・どこでも</strong> Copilot セッションをリモート制御で引き継げる</li>
+          </ul>
+          <div class="card-quote">"Each sandbox runs in a fully isolated, ephemeral Linux environment hosted by GitHub."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-preview">パブリックプレビュー</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Docs</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ THEME 2 ══ -->
+<div class="content-section" id="theme2">
+  <div class="section-header">
+    <div class="section-num-large" style="background:var(--theme2)">02</div>
+    <div class="section-title-block">
+      <h2>Copilot Code Review</h2>
+      <p>AI code review — 適応的・エージェント的なコードレビューシステム</p>
+    </div>
+    <span class="section-badge" style="background:var(--theme2)">5 項目</span>
+  </div>
+
+  <div style="background:var(--cp-surface);border:1px solid var(--cp-border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:0.85rem;color:var(--cp-text-muted);border-left:4px solid var(--theme2);">
+    💬 "As agents produce more pull requests, the pressure on code review compounds. Copilot code review brings an adaptable, agentic system to filter through the noise."
+  </div>
+
+  <div class="cards-grid">
+    <!-- Review extensibility -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme2)"></div>
+      <div class="card-body">
+        <div class="card-title">🔧 レビューの拡張性強化</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong>Custom Agent Skills・MCP Server・Actions workflow</strong> を使い、社内基準・内部システムに合わせてレビューを構成可能</li>
+            <li>すべてのレビューに<strong>自社のエンジニアリングコンテキスト</strong>を反映</li>
+            <li>「Commit suggestion」「Add suggestion to batch」で提案を直接適用・バッチ化</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">拡張対応</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / Docs</span>
+      </div>
+    </div>
+
+    <!-- Medium tier -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme2)"></div>
+      <div class="card-body">
+        <div class="card-title">🎯 Medium tier review</div>
+        <div class="card-desc">
+          <ul>
+            <li>PR を<strong>より高い推論能力のモデルにルーティング</strong>し、精度（precision）と再現率（recall）を向上</li>
+            <li>管理者はリポジトリ単位で<strong>"low" / "medium"</strong> に設定可能</li>
+            <li>低リスクコードは軽量モデル、高影響リポジトリは堅牢なモデルと使い分け</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新階層</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / Docs</span>
+      </div>
+    </div>
+
+    <!-- /security-review -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme2)"></div>
+      <div class="card-body">
+        <div class="card-title">🛡️ /security-review</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong>セキュリティ観点に特化</strong>したコード評価スキル</li>
+            <li>Copilot に<strong>セキュリティ重視の評価のための専用パス</strong>を提供</li>
+          </ul>
+          <div class="card-quote">"The /security-review skill gives Copilot a dedicated path for security-focused evaluation."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新スキル</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- /rubberduck GA -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme2)"></div>
+      <div class="card-body">
+        <div class="card-title">🦆 /rubberduck の GA</div>
+        <div class="card-desc">
+          <ul>
+            <li>実装・設計・テストを批評し、<strong>見落としを探すセカンドオピニオン</strong>機能が一般提供に</li>
+            <li><strong>複数のモデルファミリー</strong>を使って実装を批評し、新規の問題を発見</li>
+          </ul>
+          <div class="card-quote">"The /rubberduck skill is now generally available to use multiple model families to critique your implementation and find novel issues."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-ga">GA</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Azure Repos -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme2)"></div>
+      <div class="card-body">
+        <div class="card-title">🔵 Azure DevOps / Azure Repos 対応</div>
+        <div class="card-desc">
+          <ul>
+            <li>Azure Repos 上で<strong>Copilot code review をネイティブに利用可能</strong></li>
+            <li><strong>ワンクリックレビュー・インラインコメント・コミット可能な修正提案</strong></li>
+            <li>管理者は任意のリポジトリでレビューを有効化できる</li>
+          </ul>
+          <div class="card-quote">"If you're working on Azure DevOps, you can now use Copilot code review natively."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-preview">テクニカルプレビュー</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / Docs</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ THEME 3 ══ -->
+<div class="content-section" id="theme3">
+  <div class="section-header">
+    <div class="section-num-large" style="background:var(--theme3)">03</div>
+    <div class="section-title-block">
+      <h2>SDK / CLI / 実行基盤 / IDE</h2>
+      <p>Extensible agent platform — One runtime, many surfaces</p>
+    </div>
+    <span class="section-badge" style="background:var(--theme3)">15 項目</span>
+  </div>
+
+  <div class="cards-grid">
+    <!-- SDK GA -->
+    <div class="update-card" style="grid-column: span 1;">
+      <div class="card-accent-bar" style="background:var(--theme3)"></div>
+      <div class="card-body">
+        <div class="card-title">📦 GitHub Copilot SDK の GA</div>
+        <div class="card-desc">
+          <strong>Node.js/TypeScript・Python・Go・.NET・Rust・Java</strong> で Copilot エージェントランタイムを自社ツールに組み込み可能。
+          <ul style="margin-top:0.5rem;">
+            <li>GA 時に <strong>Rust・Java SDK</strong> を新規追加</li>
+            <li>Custom tools & MCP・Fine-grained system prompt・OpenTelemetry tracing・BYOK・Hook system・Multi-client workflows</li>
+          </ul>
+          <div class="card-quote">"It exposes the same agentic runtime that powers the Copilot app."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-ga">GA</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Changelog / Docs</span>
+      </div>
+    </div>
+
+    <!-- Copilot CLI TUI -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme3)"></div>
+      <div class="card-body">
+        <div class="card-title">💻 Copilot CLI 新 Terminal UI</div>
+        <div class="card-desc">
+          <ul>
+            <li>タブ型 UI で <strong>Issue・PR・Gist を CLI 内で操作</strong></li>
+            <li>カラーテーマ・アクセシビリティ改善も含む</li>
+            <li><code>/experimental</code> モードで提供</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-preview">/experimental</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Voice Input -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme3)"></div>
+      <div class="card-body">
+        <div class="card-title">🎤 Voice Input</div>
+        <div class="card-desc">
+          <ul>
+            <li>端末で<strong>音声入力</strong></li>
+            <li><strong>オンデバイスの音声テキスト変換</strong>を使用するため、音声は端末の外に出ない</li>
+          </ul>
+          <div class="card-quote">"Voice mode uses on-device speech-to-text, so audio never leaves your machine."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-ga">GA</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / Docs</span>
+      </div>
+    </div>
+
+    <!-- Prompt Scheduling -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme3)"></div>
+      <div class="card-body">
+        <div class="card-title">⏰ Prompt Scheduling</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong><code>/every</code></strong>：繰り返しプロンプト・バックグラウンドタスクのスケジュール（定期実行）</li>
+            <li><strong><code>/after</code></strong>：指定後に実行する遅延スケジュール</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新機能</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / CLI changelog</span>
+      </div>
+    </div>
+
+    <!-- Rubber Duck CLI -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme3)"></div>
+      <div class="card-body">
+        <div class="card-title">🦆 Rubber Duck 連携（CLI）</div>
+        <div class="card-desc">
+          <ul>
+            <li>CLI のメインエージェントが必要に応じて <strong>Rubber Duck へ設計・実装・テストの批評を依頼</strong></li>
+            <li>人手を介さず、品質チェックを CLI ワークフローに組み込める</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新機能</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">CLI changelog</span>
+      </div>
+    </div>
+
+    <!-- JetBrains group -->
+    <div class="subgroup">
+      <div class="subgroup-title">🟠 JetBrains IDE 向け Copilot 強化</div>
+      <div class="subgroup-grid">
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">Agent picker</div>
+            <div class="card-desc">
+              4 モードをチャットパネルのピッカーで選択：
+              <ul style="margin-top:0.3rem">
+                <li><strong>Agent</strong>（デフォルト）— 完全エージェント体験</li>
+                <li><strong>Ask</strong> — クイック回答</li>
+                <li><strong>Custom agents</strong> — 自社カスタム</li>
+                <li><strong>Plan</strong> — 構造化プランの作成・レビュー</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新機能</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">/remote</div>
+            <div class="card-desc">
+              <ul>
+                <li>github.com または GitHub Mobile アプリから<strong>進行中の CLI セッションをリモート操作</strong></li>
+                <li>マシンを離れても作業を継続できる</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新スラッシュコマンド</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">/compact</div>
+            <div class="card-desc">
+              <ul>
+                <li>長時間セッションのコンテキストを<strong>手動で圧縮</strong></li>
+                <li>セッションを管理しやすく保つ</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新スラッシュコマンド</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">/chronicle</div>
+            <div class="card-desc">
+              セッション履歴の分析・パーソナライズされた改善提案：
+              <ul style="margin-top:0.3rem">
+                <li><code>/chronicle standup</code> — 直近セッション要約</li>
+                <li><code>/chronicle tips</code> — 活用ヒント</li>
+                <li><code>/chronicle improve</code> — カスタム指示を自動生成</li>
+                <li><code>/chronicle search</code> — 過去セッション検索</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新スラッシュコマンド</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">Agent Debug Panel</div>
+            <div class="card-desc">
+              <ul>
+                <li>エージェントインタラクションの<strong>時系列イベントログ</strong>を表示</li>
+                <li>カスタムエージェントやサブエージェントオーケストレーションのデバッグに有効</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-preview">パブリックプレビュー</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">Configurable thinking effort</div>
+            <div class="card-desc">
+              <ul>
+                <li>推論モデルの思考量を <strong>low / medium / high</strong> で調整</li>
+                <li>複雑なアーキテクチャ判断は high、単純なコード生成は low</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新機能</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">Agent customizations editor</div>
+            <div class="card-desc">
+              <ul>
+                <li>カスタムエージェント・reusable skills・instructions・prompts を<strong>一元管理する UI</strong></li>
+                <li>Agent skills・hooks・Prompt files・Anthropic Thinking が <strong>GA</strong> に</li>
+                <li>BYOK が Editor Preview フラグなしで利用可能に</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-ga">GA 機能含む</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VS Code -->
+    <div class="subgroup">
+      <div class="subgroup-title">🔵 VS Code / Visual Studio</div>
+      <div class="subgroup-grid">
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">VS Code — Multi-Agent フレームワーク</div>
+            <div class="card-desc">
+              <ul>
+                <li><strong>Orchestrator エージェント</strong>が複数のサブエージェントを並列起動</li>
+                <li>linting / test-gen / docs / security review などの専門サブエージェントを<strong>並列で実行</strong></li>
+                <li>開発者は VS Code 内からリアルタイムで<strong>監視・介入・操作</strong>が可能</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新機能</span><span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">Visual Studio — Plan agent</div>
+            <div class="card-desc">
+              コードを書く前に<strong>実装計画を対話的に作成・承認</strong>：
+              <ol style="padding-left:1.2rem;margin-top:0.3rem;font-size:0.78rem;">
+                <li>コードベースをスキャン</li>
+                <li>不明点を質問しながらプランを起草</li>
+                <li>開発者がチャット・Markdown 直接編集でプランを精査</li>
+                <li>承認後、Agent mode でコード変更を実行</li>
+                <li><code>.copilot/plans/plan-{title}.md</code> として保存</li>
+              </ol>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新機能</span><span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Changelog</span></div>
+        </div>
+
+        <div class="update-card">
+          <div class="card-accent-bar" style="background:var(--theme3)"></div>
+          <div class="card-body">
+            <div class="card-title">Visual Studio — Multi-file change summaries</div>
+            <div class="card-desc">
+              <ul>
+                <li>複数ファイルにまたがる変更を<strong>統合ビューで一覧</strong></li>
+                <li>Accept / Undo をファイル単位・チャンク単位で選択可能</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card-footer"><span class="card-tag tag-new">新機能</span><span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Changelog</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ THEME 4 ══ -->
+<div class="content-section" id="theme4">
+  <div class="section-header">
+    <div class="section-num-large" style="background:var(--theme4)">04</div>
+    <div class="section-title-block">
+      <h2>Cloud Agent / 継続コンテキスト / エコシステム</h2>
+      <p>Trusted execution & ecosystem — エンジニアリングの全フローをカバー</p>
+    </div>
+    <span class="section-badge" style="background:var(--theme4)">9 項目</span>
+  </div>
+
+  <div class="cards-grid">
+    <!-- Cloud Automations -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">🤖 Cloud Automations / Autopilot</div>
+        <div class="card-desc">
+          <ul>
+            <li>エージェントを<strong>スケジュール実行・GitHub イベントへの応答・Issue 起票・コメント投稿</strong>で動かせる</li>
+            <li>デフォルトでは<strong>各書き込みアクションの前に許可を求める</strong></li>
+            <li>信頼を確立したら <strong>autopilot（自動操縦）</strong>に切り替え</li>
+          </ul>
+          <div class="card-quote">"Switch to autopilot once you have established trust."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新機能</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog / Docs</span>
+      </div>
+    </div>
+
+    <!-- PAT不要 -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">🔑 Agentic Workflows — PAT 不要</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong><code>GITHUB_TOKEN</code></strong> で Agentic Workflows が動作（scope: <code>copilot-requests: write</code>）</li>
+            <li>長命トークン（PAT）の作成・管理・ローテーションが<strong>不要</strong>に</li>
+            <li><strong>組織課金（organization-billed AI credits）</strong>に対応</li>
+            <li>単一ワークフロー実行にスコープされた短命トークンで<strong>権限を最小化</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">セキュリティ強化</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Changelog (2026-06-11)</span>
+      </div>
+    </div>
+
+    <!-- Cloud Agent 業務拡張 -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">📋 Cloud Agent の業務範囲拡張</div>
+        <div class="card-desc">
+          <ul>
+            <li>コーディングだけでなく、<strong>Issue 登録・議論開始・レビューコメントへの返信</strong>まで実行可能</li>
+          </ul>
+          <div class="card-quote">"Engineering doesn't end with writing code. It includes filing the issue, kicking off the discussion, and replying to reviewers. Copilot cloud agent can now handle every one of those steps."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">機能拡張</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Memory++ -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">🧠 Memory++ と /chronicle</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong>Copilot app・CLI・VS Code・GitHub.com をまたいで</strong>セッション文脈を追跡・検索</li>
+            <li>どこで始めたセッションのコンテキストでも横断的にクエリできる</li>
+          </ul>
+          <div class="card-quote">"Memory++ and /chronicle give Copilot continuity across devices and over time."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新機能</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Partner Apps -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">🤝 Partner-built Agent Apps</div>
+        <div class="card-desc">
+          <ul>
+            <li>GitHub 上で<strong>外部パートナーのエージェントを利用・Issue アサイン</strong>可能</li>
+            <li>例：LaunchDarkly・Sonar・PagerDuty・Miro・Bright・Amplitude・Endor Labs・Octopus Deploy・Packfiles</li>
+            <li>自社エージェントアプリを持ち込むための<strong>ウェイトリスト</strong>も提供</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">エコシステム</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Blog</span>
+      </div>
+    </div>
+
+    <!-- Gemini -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">💎 Gemini モデル対応</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong>Copilot CLI・Cloud Agent・Copilot app</strong> で Gemini モデルを利用可能</li>
+            <li>CLI ではモデルファミリーを名前で指定（<code>opus / sonnet / haiku / gpt / gemini</code>）</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">マルチモデル</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">CLI changelog</span>
+      </div>
+    </div>
+
+    <!-- MAI Models -->
+    <div class="update-card" style="grid-column: 1 / -1;">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">🚀 MAI モデルファミリー（Build 2026）— 7 モデル ゼロから自社開発</div>
+        <div class="card-desc">
+          <p style="margin-bottom:0.75rem;"><strong>すべてゼロから学習</strong>（他社モデルから蒸留せず）。Maia 200 シリコンとの協調設計により、クリーンなデータ系譜と完全なスタック制御を実現。</p>
+          <div class="table-wrap">
+            <table class="model-table">
+              <thead>
+                <tr>
+                  <th>モデル</th>
+                  <th>カテゴリ</th>
+                  <th>主なスペック・特徴</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="model-name">MAI-Thinking-1</span></td>
+                  <td><span class="model-cat">推論（フラッグシップ）</span></td>
+                  <td>35B active パラメータ（MoE・~1T total）・256K コンテキスト。SWE-Bench Pro 52.8%（Claude Opus 4.6 と同等）。AIME 2025: 97.0%</td>
+                </tr>
+                <tr>
+                  <td><span class="model-name">MAI-Code-1-Flash</span></td>
+                  <td><span class="model-cat">コーディング</span></td>
+                  <td>5B パラメータ。SWE-Bench Pro で Claude Haiku 4.5 を 16pt 上回り、複雑なコーディングタスクでトークン 60% 削減。GitHub Copilot 専用設計</td>
+                </tr>
+                <tr>
+                  <td><span class="model-name">MAI-Image-2.5</span></td>
+                  <td><span class="model-cat">画像生成・編集</span></td>
+                  <td>text-to-image / image-to-image。Arena.ai で 2 位。PowerPoint・OneDrive 展開済み</td>
+                </tr>
+                <tr>
+                  <td><span class="model-name">MAI-Image-2.5 Flash</span></td>
+                  <td><span class="model-cat">画像生成（高速）</span></td>
+                  <td>MAI-Image-2.5 の高速・低コスト版。高スケール設定向け</td>
+                </tr>
+                <tr>
+                  <td><span class="model-name">MAI-Voice-2</span></td>
+                  <td><span class="model-cat">音声合成</span></td>
+                  <td>15 以上の言語対応。感情表現・プロソディ制御・短いサンプルからの声紋クローニング</td>
+                </tr>
+                <tr>
+                  <td><span class="model-name">MAI-Voice-2 Flash</span></td>
+                  <td><span class="model-cat">音声合成（高速）</span></td>
+                  <td>MAI-Voice-2 の高速・低コスト版</td>
+                </tr>
+                <tr>
+                  <td><span class="model-name">MAI-Transcribe-1.5</span></td>
+                  <td><span class="model-cat">音声認識</span></td>
+                  <td>43 言語対応。FLEURS ベンチマークで最高精度。競合モデル比で最大 5 倍高速</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">7 モデル</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">microsoft.ai / Build26-news</span>
+      </div>
+    </div>
+
+    <!-- MAI-Code-1-Flash -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">⚡ MAI-Code-1-Flash — GitHub Copilot 対応</div>
+        <div class="card-desc">
+          <ul>
+            <li>MAI ファミリーで<strong>GitHub Copilot に特化した最初のモデル</strong></li>
+            <li><strong>VS Code から提供開始</strong>、モデルピッカーで選択可能</li>
+            <li>提供プラン：<strong>Free / Student / Pro / Pro+ / Max</strong>（段階展開）</li>
+            <li>5B パラメータながら<strong>Claude Haiku 4.5 を SWE-Bench Pro で 16pt 超過</strong>、かつトークン消費 60% 削減</li>
+          </ul>
+          <div class="card-quote">"This marks the first in a new wave of purpose-built coding models from Microsoft."</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">新モデル</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">GitHub Changelog / microsoft.ai</span>
+      </div>
+    </div>
+
+    <!-- Frontier Tuning -->
+    <div class="update-card">
+      <div class="card-accent-bar" style="background:var(--theme4)"></div>
+      <div class="card-body">
+        <div class="card-title">🏋️ Frontier Tuning（企業向けカスタマイズ）</div>
+        <div class="card-desc">
+          <ul>
+            <li><strong>強化学習（RL）を実際の業務環境で適用</strong>し、組織固有のワークフローをモデルに学習させる仕組み</li>
+            <li>学習データは企業自身のもの：実際のエージェントが完了したタスクのトレースが学習データに</li>
+            <li>事例：MAI を Excel 向けにチューニング → <strong>GPT 5.4 と同等の精度を 10 倍の効率</strong>で達成</li>
+            <li>チューニング後のモデルは企業の環境内に留まり、<strong>外部に出ない</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-tag tag-new">エンタープライズ</span>
+        <span style="font-size:0.7rem;color:var(--cp-text-muted)">microsoft.ai</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FULL SUMMARY TABLE -->
+<div class="content-section">
+  <div style="border-top: 2px solid var(--cp-border); padding-top: 2rem; margin-bottom: 1.25rem;">
+    <h2 style="font-size:1.35rem;font-weight:800;letter-spacing:-0.01em;">📋 全 35 項目 一覧</h2>
+    <p style="font-size:0.85rem;color:var(--cp-text-muted);margin-top:0.3rem;">Microsoft Build 2026 GitHub Copilot アップデート完全リスト</p>
+  </div>
+  <div class="table-wrap">
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>テーマ</th>
+          <th>項目</th>
+          <th>一言で</th>
+          <th>状態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td style="color:var(--theme1);font-weight:600;">01</td><td>GitHub Copilot app</td><td>My Work で複数エージェントを一元管理</td><td><span class="card-tag tag-preview">テクニカルプレビュー</span></td></tr>
+        <tr><td>2</td><td style="color:var(--theme1);font-weight:600;">01</td><td>Copilot Max</td><td>高頻度利用者向けの上位プラン</td><td><span class="card-tag tag-new">新プラン</span></td></tr>
+        <tr><td>3</td><td style="color:var(--theme1);font-weight:600;">01</td><td>Agent Merge</td><td>レビュー〜条件付きマージまで自動化</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>4</td><td style="color:var(--theme1);font-weight:600;">01</td><td>Canvas</td><td>人とエージェントの共同作業面</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>5</td><td style="color:var(--theme1);font-weight:600;">01</td><td>Local Sandboxes</td><td>権限制限のローカル隔離実行</td><td><span class="card-tag tag-preview">パブリックプレビュー</span></td></tr>
+        <tr><td>6</td><td style="color:var(--theme1);font-weight:600;">01</td><td>Cloud Sandboxes</td><td>GitHubホストの一時隔離Linux環境</td><td><span class="card-tag tag-preview">パブリックプレビュー</span></td></tr>
+        <tr><td>7</td><td style="color:var(--theme2);font-weight:600;">02</td><td>レビューの拡張性強化</td><td>Custom Skills・MCP・Actionsで社内基準を反映</td><td><span class="card-tag tag-new">拡張対応</span></td></tr>
+        <tr><td>8</td><td style="color:var(--theme2);font-weight:600;">02</td><td>Medium tier review</td><td>高推論モデルへルーティング（low/medium）</td><td><span class="card-tag tag-new">新階層</span></td></tr>
+        <tr><td>9</td><td style="color:var(--theme2);font-weight:600;">02</td><td>/security-review</td><td>セキュリティ特化の評価スキル</td><td><span class="card-tag tag-new">新スキル</span></td></tr>
+        <tr><td>10</td><td style="color:var(--theme2);font-weight:600;">02</td><td>/rubberduck GA</td><td>複数モデルで実装を批評するセカンドオピニオン</td><td><span class="card-tag tag-ga">GA</span></td></tr>
+        <tr><td>11</td><td style="color:var(--theme2);font-weight:600;">02</td><td>Azure Repos 対応</td><td>ADOでワンクリックレビュー・修正提案</td><td><span class="card-tag tag-preview">テクニカルプレビュー</span></td></tr>
+        <tr><td>12</td><td style="color:var(--theme3);font-weight:600;">03</td><td>Copilot SDK GA</td><td>6言語 + MCP/Hook/BYOK/OpenTelemetry</td><td><span class="card-tag tag-ga">GA</span></td></tr>
+        <tr><td>13</td><td style="color:var(--theme3);font-weight:600;">03</td><td>新 Terminal UI</td><td>PR/Issue/Gistをタブ型で操作</td><td><span class="card-tag tag-preview">/experimental</span></td></tr>
+        <tr><td>14</td><td style="color:var(--theme3);font-weight:600;">03</td><td>Voice Input</td><td>端末で音声入力（ローカル処理）</td><td><span class="card-tag tag-ga">GA</span></td></tr>
+        <tr><td>15</td><td style="color:var(--theme3);font-weight:600;">03</td><td>Prompt Scheduling</td><td>/every・/afterで定期・遅延実行</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>16</td><td style="color:var(--theme3);font-weight:600;">03</td><td>Rubber Duck 連携</td><td>CLIから設計・実装・テストの批評を依頼</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>17</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — Agent picker</td><td>Agent/Ask/Plan/Customの4モード選択</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>18</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — /remote</td><td>github.com/モバイルからセッションをリモート制御</td><td><span class="card-tag tag-new">新コマンド</span></td></tr>
+        <tr><td>19</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — /compact</td><td>長時間セッションのコンテキストを手動圧縮</td><td><span class="card-tag tag-new">新コマンド</span></td></tr>
+        <tr><td>20</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — /chronicle</td><td>セッション履歴分析・standup/tips/improve/search</td><td><span class="card-tag tag-new">新コマンド</span></td></tr>
+        <tr><td>21</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — Agent Debug Panel</td><td>エージェント動作の時系列ログ</td><td><span class="card-tag tag-preview">パブリックプレビュー</span></td></tr>
+        <tr><td>22</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — thinking effort</td><td>推論モデルの思考量をlow/medium/highで調整</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>23</td><td style="color:var(--theme3);font-weight:600;">03</td><td>JetBrains — Agent customizations editor</td><td>カスタムエージェント・skills・prompts一元管理</td><td><span class="card-tag tag-ga">GA 機能含む</span></td></tr>
+        <tr><td>24</td><td style="color:var(--theme3);font-weight:600;">03</td><td>VS Code — Multi-Agent</td><td>Orchestrator + 並列サブエージェント</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>25</td><td style="color:var(--theme3);font-weight:600;">03</td><td>Visual Studio — Plan agent</td><td>計画→承認→実装の段階的ワークフロー</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>26</td><td style="color:var(--theme3);font-weight:600;">03</td><td>Visual Studio — Multi-file summaries</td><td>複数ファイル変更の統合ビュー</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>27</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Cloud Automations / Autopilot</td><td>スケジュール・イベント応答・起票・コメントを自動化</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>28</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Agentic Workflows（PAT不要）</td><td>GITHUB_TOKEN対応・組織課金・セキュリティ向上</td><td><span class="card-tag tag-new">セキュリティ強化</span></td></tr>
+        <tr><td>29</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Cloud Agent 業務範囲拡張</td><td>起票・議論開始・レビュー返信まで実行</td><td><span class="card-tag tag-new">機能拡張</span></td></tr>
+        <tr><td>30</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Memory++ / /chronicle</td><td>app/CLI/VS Code/GitHub.com横断の文脈追跡</td><td><span class="card-tag tag-new">新機能</span></td></tr>
+        <tr><td>31</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Partner-built Agent Apps</td><td>外部エージェントの利用・Issueアサイン</td><td><span class="card-tag tag-new">エコシステム</span></td></tr>
+        <tr><td>32</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Gemini モデル対応</td><td>CLI/Cloud Agent/appでGemini選択可</td><td><span class="card-tag tag-new">マルチモデル</span></td></tr>
+        <tr><td>33</td><td style="color:var(--theme4);font-weight:600;">04</td><td>MAI モデルファミリー（7モデル）</td><td>Thinking/Code/Image/Voice/Transcribeをゼロから自社開発</td><td><span class="card-tag tag-new">新モデル群</span></td></tr>
+        <tr><td>34</td><td style="color:var(--theme4);font-weight:600;">04</td><td>MAI-Code-1-Flash</td><td>5B・Copilot専用チューニング・SWE-Bench ProでHaiku超</td><td><span class="card-tag tag-new">新モデル</span></td></tr>
+        <tr><td>35</td><td style="color:var(--theme4);font-weight:600;">04</td><td>Frontier Tuning</td><td>企業ワークフローでモデルをカスタムRL学習</td><td><span class="card-tag tag-new">エンタープライズ</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="site-footer">
+  <p>Microsoft Build 2026 — GitHub Copilot Update Deep Dive</p>
+  <p style="margin-top:0.35rem;">📅 2026年6月2日 発表  ／  公式情報（GitHub Blog / GitHub Changelog / GitHub Docs / Microsoft AI）ベース  ／  全 35 項目</p>
+</footer>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute("data-theme");
+    html.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+  }
+
+  // Nav active state on scroll
+  const sections = document.querySelectorAll("[id]");
+  const navPills = document.querySelectorAll(".nav-pill");
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          navPills.forEach((p) => {
+            p.classList.toggle("active", p.getAttribute("href") === "#" + e.target.id);
+          });
+        }
+      });
+    },
+    { rootMargin: "-20% 0px -70% 0px" }
+  );
+  sections.forEach((s) => observer.observe(s));
+</script>
+</body>
+</html>
